@@ -51,10 +51,14 @@ export async function resolveModel(query: string): Promise<string> {
     lines.push(`  ... and ${allMatches.length - 15} more`);
   }
 
+  const topIds = allMatches.slice(0, 5).map((m) => m.id);
   throw new CliError(
     `Multiple models match '${query}':\n${lines.join("\n")}\nBe more specific, or use the full model ID`,
     "AMBIGUOUS",
     ExitCode.AMBIGUOUS,
-    ["Use the full model ID (e.g. 'google/gemini-2.5-pro')"],
+    [
+      `Use a full model ID, e.g.: or-pricing price ${topIds[0]}`,
+      ...topIds.slice(1).map((id) => `or-pricing price ${id}`),
+    ],
   );
 }
