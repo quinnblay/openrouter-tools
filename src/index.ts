@@ -260,7 +260,7 @@ program
   .alias("lb")
   .description("Top models on OpenRouter")
   .option("--json", "Output structured JSON")
-  .option("--refresh", "Scrape fresh leaderboard data via playwright-cli")
+  .option("--refresh", "Fetch fresh leaderboard data")
   .option("--update-cache", "Read JSON from stdin and write to cache")
   .option("--app [url]", "Leaderboard for a specific app (default: openclaw.ai)")
   .action(
@@ -315,7 +315,7 @@ program
         return;
       }
 
-      // --refresh: scrape via playwright-cli
+      // --refresh: fetch fresh data
       if (opts.refresh) {
         const data = await scrapeLeaderboard(scrapeUrl, title);
         const ts = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
