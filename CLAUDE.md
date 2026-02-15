@@ -20,7 +20,7 @@ node dist/index.js <command>    # Run
 | `src/pricing.ts` | `computePricing()` — uptime-weighted expected price algorithm |
 | `src/resolve.ts` | Model resolution (exact ID > substring ID > substring name) |
 | `src/format.ts` | Human-readable table formatters (chalk for colors) |
-| `src/config.ts` | Read `~/.openclaw/openclaw.json` |
+| `src/stdin.ts` | Reads model IDs from piped stdin (one per line) |
 | `src/scrape.ts` | Leaderboard fetching — parses SSR data from OpenRouter HTML |
 
 ## Architecture
@@ -38,7 +38,7 @@ node dist/index.js <command>    # Run
 - Each module has a single responsibility — edit the relevant file
 - `computePricing()` in `src/pricing.ts` is the core algorithm
 - `resolveModel()` in `src/resolve.ts` handles fuzzy matching with structured error for ambiguous results
-- Config path is hardcoded to `~/.openclaw/openclaw.json` in `src/config.ts`
+- `price` and `compare` accept variadic args + piped stdin (one model ID per line)
 - No tests exist. Verify changes by running each command manually.
 
 ## OpenRouter APIs

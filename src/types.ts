@@ -77,7 +77,6 @@ export interface CompareEntry {
   expected_completion: number | null;
   providers: number;
   healthy: number;
-  primary?: boolean;
 }
 
 export interface LeaderboardEntry {
@@ -91,17 +90,6 @@ export interface LeaderboardOutput {
   entries: LeaderboardEntry[];
   cached_at?: string;
   source?: string;
-}
-
-// --- OpenClaw config ---
-
-export interface OpenClawConfig {
-  agents?: {
-    defaults?: {
-      model?: { primary?: string };
-      models?: Record<string, { alias?: string }>;
-    };
-  };
 }
 
 // --- Exit codes ---

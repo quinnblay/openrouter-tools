@@ -1,24 +1,17 @@
 import { Command } from "commander";
 import { fetchModels, fetchEndpoints } from "./api.js";
 import { readCacheRaw, writeCacheRaw } from "./cache.js";
-import {
-  readConfig,
-  getConfigPath,
-  getConfiguredModelIds,
-  getPrimaryModelId,
-  getConfiguredAliases,
-} from "./config.js";
 import { CliError } from "./errors.js";
 import {
   formatSearch,
   formatPrice,
   formatCompare,
-  formatConfigured,
   formatLeaderboard,
 } from "./format.js";
 import { computePricing } from "./pricing.js";
 import { resolveModel } from "./resolve.js";
 import { scrapeLeaderboard } from "./scrape.js";
+import { readStdinLines } from "./stdin.js";
 import type {
   CompareEntry,
   LeaderboardOutput,
@@ -107,58 +100,88 @@ program
 // --- price ---
 
 program
-  .command("price <model>")
+  .command("price [models...]")
   .alias("p")
-  .description("Per-provider pricing + weighted expected price")
+  .description("Per-provider pricing + weighted expected price (accepts stdin)")
   .option("--json", "Output structured JSON")
-  .action(async (query: string, opts: { json?: boolean }) => {
-    const modelId = await resolveModel(query);
+  .action(async (args: string[], opts: { json?: boolean }) => {
+    const stdinModels = await readStdinLines();
+    const queries = [...args, ...stdinModels];
+
+    if (queries.length === 0) {
+      throw new CliError(
+        "no models specified",
+        "INVALID_INPUT",
+        ExitCode.INVALID_INPUT,
+        ["Provide model names as arguments or pipe them via stdin",
+         "Example: or-pricing price claude-sonnet-4-5 gpt-4o",
+         "Example: echo 'claude-sonnet-4-5' | or-pricing price"],
+      );
+    }
+
+    const modelIds: string[] = [];
+    for (const q of queries) {
+      modelIds.push(await resolveModel(q));
+    }
+
     const { data: models } = await fetchModels();
-    const model = models.find((m) => m.id === modelId)!;
+    const outputs: PriceOutput[] = [];
 
-    const endpoints = await fetchEndpoints(modelId);
-    const pricing = computePricing(endpoints);
+    for (let i = 0; i < modelIds.length; i++) {
+      if (i > 0) await sleep(ENDPOINT_DELAY);
 
-    const output: PriceOutput = {
-      id: modelId,
-      name: model.name,
-      context_length: model.context_length,
-      headline: {
-        prompt_per_m: toPerM(model.pricing.prompt),
-        completion_per_m: toPerM(model.pricing.completion),
-      },
-      expected: {
-        prompt_per_m: pricing.prompt_expected,
-        completion_per_m: pricing.completion_expected,
-      },
-      providers: pricing.providers,
-    };
+      const mid = modelIds[i];
+      const model = models.find((m) => m.id === mid)!;
+      const endpoints = await fetchEndpoints(mid);
+      const pricing = computePricing(endpoints);
+
+      outputs.push({
+        id: mid,
+        name: model.name,
+        context_length: model.context_length,
+        headline: {
+          prompt_per_m: toPerM(model.pricing.prompt),
+          completion_per_m: toPerM(model.pricing.completion),
+        },
+        expected: {
+          prompt_per_m: pricing.prompt_expected,
+          completion_per_m: pricing.completion_expected,
+        },
+        providers: pricing.providers,
+      });
+    }
 
     if (opts.json) {
-      console.log(jsonOut(output));
+      console.log(jsonOut(outputs.length === 1 ? outputs[0] : outputs));
     } else {
-      console.log(formatPrice(output));
+      for (const output of outputs) {
+        console.log(formatPrice(output));
+      }
     }
   });
 
 // --- compare ---
 
 program
-  .command("compare <models...>")
+  .command("compare [models...]")
   .alias("cmp")
-  .description("Side-by-side comparison of multiple models")
+  .description("Side-by-side summary comparison of multiple models (accepts stdin)")
   .option("--json", "Output structured JSON")
-  .action(async (queries: string[], opts: { json?: boolean }) => {
+  .action(async (args: string[], opts: { json?: boolean }) => {
+    const stdinModels = await readStdinLines();
+    const queries = [...args, ...stdinModels];
+
     if (queries.length < 2) {
       throw new CliError(
         "compare requires at least 2 models",
         "INVALID_INPUT",
         ExitCode.INVALID_INPUT,
-        ["Provide at least 2 model names or IDs", "Example: or-pricing compare claude-sonnet gpt-4o"],
+        ["Provide at least 2 model names or IDs",
+         "Example: or-pricing compare claude-sonnet-4-5 gpt-4o",
+         "Example: echo -e 'claude-sonnet-4-5\\ngpt-4o' | or-pricing compare"],
       );
     }
 
-    // Resolve all models first
     const modelIds: string[] = [];
     for (const q of queries) {
       modelIds.push(await resolveModel(q));
@@ -195,75 +218,6 @@ program
       console.log(jsonOut(entries));
     } else {
       console.log(formatCompare(entries));
-    }
-  });
-
-// --- configured ---
-
-program
-  .command("configured")
-  .alias("cfg")
-  .description("Pricing for models configured in openclaw.json")
-  .option("--json", "Output structured JSON")
-  .action(async (opts: { json?: boolean }) => {
-    const config = readConfig();
-    if (!config) {
-      throw new CliError(
-        `openclaw config not found at ${getConfigPath()}`,
-        "CONFIG_ERROR",
-        ExitCode.CONFIG,
-        ["Create ~/.openclaw/openclaw.json", "See documentation for config format"],
-      );
-    }
-
-    const modelIds = getConfiguredModelIds(config);
-    if (modelIds.length === 0) {
-      throw new CliError(
-        `no models configured in ${getConfigPath()}`,
-        "CONFIG_ERROR",
-        ExitCode.CONFIG,
-        ["Add model entries to the 'agents.defaults.models' section"],
-      );
-    }
-
-    const primary = getPrimaryModelId(config);
-    const { data: models } = await fetchModels();
-    const entries: CompareEntry[] = [];
-
-    for (let i = 0; i < modelIds.length; i++) {
-      if (i > 0) await sleep(ENDPOINT_DELAY);
-
-      const mid = modelIds[i];
-      const model = models.find((m) => m.id === mid);
-      if (!model) {
-        process.stderr.write(`warning: model '${mid}' not found in API, skipping\n`);
-        continue;
-      }
-
-      const endpoints = await fetchEndpoints(mid);
-      const pricing = computePricing(endpoints);
-
-      const providerCount = pricing.providers.length;
-      const healthyCount = pricing.providers.filter((p) => p.status >= 0).length;
-
-      entries.push({
-        id: mid,
-        name: model.name,
-        context: model.context_length,
-        headline_prompt: toPerM(model.pricing.prompt),
-        headline_completion: toPerM(model.pricing.completion),
-        expected_prompt: pricing.prompt_expected,
-        expected_completion: pricing.completion_expected,
-        providers: providerCount,
-        healthy: healthyCount,
-        primary: mid === primary,
-      });
-    }
-
-    if (opts.json) {
-      console.log(jsonOut(entries));
-    } else {
-      console.log(formatConfigured(entries));
     }
   });
 
@@ -365,14 +319,7 @@ program
 
       const cachedAt = data.cached_at ?? "unknown";
 
-      // Get configured aliases for marking
-      let configuredAliases: string[] = [];
-      const config = readConfig();
-      if (config) {
-        configuredAliases = getConfiguredAliases(config);
-      }
-
-      console.log(formatLeaderboard(data.entries, title, cachedAt, configuredAliases));
+      console.log(formatLeaderboard(data.entries, title, cachedAt));
     },
   );
 
@@ -385,7 +332,8 @@ program
     const schemas = {
       commands: {
         price: {
-          args: "<model>",
+          args: "[models...]",
+          stdin: "one model ID per line",
           flags: ["--json"],
           output: {
             id: "string",
@@ -420,7 +368,8 @@ program
           ],
         },
         compare: {
-          args: "<models...>",
+          args: "[models...]",
+          stdin: "one model ID per line",
           flags: ["--json"],
           output: [
             {
@@ -433,24 +382,6 @@ program
               expected_completion: "number | null",
               providers: "number",
               healthy: "number",
-            },
-          ],
-        },
-        configured: {
-          args: "",
-          flags: ["--json"],
-          output: [
-            {
-              id: "string",
-              name: "string",
-              context: "number",
-              headline_prompt: "number",
-              headline_completion: "number",
-              expected_prompt: "number | null",
-              expected_completion: "number | null",
-              providers: "number",
-              healthy: "number",
-              primary: "boolean",
             },
           ],
         },
@@ -469,7 +400,6 @@ program
         NETWORK: 2,
         NOT_FOUND: 3,
         AMBIGUOUS: 4,
-        CONFIG: 5,
         SCRAPE: 6,
         INVALID_INPUT: 7,
       },
