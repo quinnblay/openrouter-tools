@@ -1,0 +1,43 @@
+{
+  "name": "or-pricing",
+  "version": "2.0.0",
+  "description": "OpenRouter model pricing CLI — realistic expected pricing weighted by provider uptime",
+  "type": "module",
+  "bin": {
+    "or-pricing": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsup --watch"
+  },
+  "files": [
+    "dist",
+    "scrape-leaderboard.js"
+  ],
+  "keywords": [
+    "openrouter",
+    "llm",
+    "pricing",
+    "cli"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quinnblay/openrouter-tools"
+  },
+  "bugs": "https://github.com/quinnblay/openrouter-tools/issues",
+  "homepage": "https://github.com/quinnblay/openrouter-tools#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "chalk": "^5.4.0",
+    "commander": "^13.0.0"
+  }
+}
