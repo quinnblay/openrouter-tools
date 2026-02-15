@@ -12,8 +12,7 @@
     "dev": "tsup --watch"
   },
   "files": [
-    "dist",
-    "scrape-leaderboard.js"
+    "dist"
   ],
   "keywords": [
     "openrouter",

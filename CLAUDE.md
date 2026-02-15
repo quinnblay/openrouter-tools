@@ -21,7 +21,7 @@ node dist/index.js <command>    # Run
 | `src/resolve.ts` | Model resolution (exact ID > substring ID > substring name) |
 | `src/format.ts` | Human-readable table formatters (chalk for colors) |
 | `src/config.ts` | Read `~/.openclaw/openclaw.json` |
-| `src/scrape.ts` | Leaderboard scraping via playwright-cli subprocess |
+| `src/scrape.ts` | Leaderboard fetching — parses SSR data from OpenRouter HTML |
 
 ## Architecture
 

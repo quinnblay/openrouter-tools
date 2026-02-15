@@ -1,103 +1,121 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { CliError } from "./errors.js";
 import { ExitCode } from "./types.js";
 
-function getScriptDir(): string {
-  return dirname(new URL(import.meta.url).pathname);
+function formatTokens(n: number): string {
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2).replace(/\.?0+$/, "")}T tokens`;
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1).replace(/\.0$/, "")}B tokens`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, "")}M tokens`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(0)}K tokens`;
+  return `${n} tokens`;
 }
 
-function findScraperJs(): string {
-  const candidates = [
-    join(process.cwd(), "scrape-leaderboard.js"),
-    join(getScriptDir(), "..", "scrape-leaderboard.js"),
-  ];
+/**
+ * Extract the chart data array from Next.js SSR payload embedded in HTML.
+ * The data lives inside self.__next_f.push([1,"..."]) calls and contains
+ * weekly snapshots: [{x: date, ys: {modelId: tokenCount, ...}}, ...]
+ */
+function extractChartData(html: string): { x: string; ys: Record<string, number> }[] {
+  // Find the __next_f.push chunk containing chart "ys" data
+  const pushPattern = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g;
+  let match: RegExpExecArray | null;
+  let dataChunk: string | null = null;
 
-  for (const path of candidates) {
-    if (existsSync(path)) return path;
+  while ((match = pushPattern.exec(html)) !== null) {
+    const raw = match[1];
+    if (raw.includes('\\"ys\\":{')) {
+      // Unescape the JS string literal: \" → " and \\ → \
+      dataChunk = raw.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+      break;
+    }
   }
 
-  throw new CliError(
-    "scraper script not found (scrape-leaderboard.js)",
-    "SCRAPE_ERROR",
-    ExitCode.SCRAPE,
-  );
+  if (!dataChunk) {
+    throw new Error("no chart data found in page");
+  }
+
+  // Find the "data":[ array within the React Server Components payload
+  const dataIdx = dataChunk.indexOf('"data":[');
+  if (dataIdx === -1) {
+    throw new Error("no data array found in SSR payload");
+  }
+
+  // Extract the JSON array by counting brackets
+  const startIdx = dataChunk.indexOf("[", dataIdx);
+  let depth = 0;
+  let endIdx = startIdx;
+  for (let i = startIdx; i < dataChunk.length; i++) {
+    if (dataChunk[i] === "[") depth++;
+    else if (dataChunk[i] === "]") depth--;
+    if (depth === 0) {
+      endIdx = i + 1;
+      break;
+    }
+  }
+
+  const jsonStr = dataChunk.slice(startIdx, endIdx);
+  return JSON.parse(jsonStr) as { x: string; ys: Record<string, number> }[];
 }
 
-function playwrightCli(args: string[], options?: { encoding?: "utf-8" }): string {
-  return execFileSync("playwright-cli", args, {
-    encoding: options?.encoding ?? "utf-8",
-    stdio: options?.encoding ? "pipe" : "ignore",
-    maxBuffer: 10 * 1024 * 1024,
-  }) as string;
-}
+export async function scrapeLeaderboard(
+  scrapeUrl: string,
+  title: string,
+): Promise<{ entries: { rank: number; model: string; author: string; tokens: string }[] }> {
+  process.stderr.write(`Fetching ${title} leaderboard...\n`);
 
-export async function scrapeLeaderboard(scrapeUrl: string, title: string): Promise<{ entries: { rank: number; model: string; author: string; tokens: string }[] }> {
+  let html: string;
   try {
-    execFileSync("which", ["playwright-cli"], { stdio: "ignore" });
-  } catch {
+    const res = await fetch(scrapeUrl, {
+      headers: { "User-Agent": "or-pricing-cli" },
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    html = await res.text();
+  } catch (err) {
     throw new CliError(
-      "playwright-cli not found. Install with: npm install -g @playwright/cli@latest",
+      `failed to fetch ${scrapeUrl}: ${err instanceof Error ? err.message : err}`,
       "SCRAPE_ERROR",
       ExitCode.SCRAPE,
     );
   }
 
-  process.stderr.write(`Scraping ${title} leaderboard...\n`);
-
-  const scraperJs = findScraperJs();
-  const scraperCode = readFileSync(scraperJs, "utf-8");
-
   try {
-    playwrightCli(["open", scrapeUrl]);
+    const weeks = extractChartData(html);
 
-    // Wait for render
-    execFileSync("sleep", ["2"]);
-
-    // Try to click "Show more"
-    try {
-      const snapshot = playwrightCli(["snapshot"], { encoding: "utf-8" });
-      const smMatch = snapshot.match(/button "Show more".*?ref=(e\d+)/);
-      if (smMatch) {
-        playwrightCli(["click", smMatch[1]]);
-        execFileSync("sleep", ["1"]);
-      }
-    } catch {
-      // Show more button not found, ok
+    if (weeks.length === 0) {
+      throw new Error("no weekly data found");
     }
 
-    // Extract leaderboard data
-    const pwOutput = playwrightCli(["run-code", scraperCode], { encoding: "utf-8" });
+    // Use the most recent week
+    const latest = weeks[weeks.length - 1];
+    const ys = latest.ys;
 
-    try {
-      playwrightCli(["close"]);
-    } catch {
-      // ignore close errors
+    // Sort by token count descending, skip "Others" bucket
+    const sorted = Object.entries(ys)
+      .filter(([id]) => id !== "Others")
+      .sort(([, a], [, b]) => b - a);
+
+    if (sorted.length === 0) {
+      throw new Error("no model entries in latest week");
     }
 
-    const jsonLine = pwOutput.split("\n").find((l) => l.startsWith('"'));
-    if (!jsonLine) {
-      throw new Error("no JSON output from playwright-cli");
-    }
-    const jsonStr = JSON.parse(jsonLine) as string;
-    const data = JSON.parse(jsonStr) as { entries: { rank: number; model: string; author: string; tokens: string }[] };
+    const entries = sorted.map(([id, count], i) => {
+      const slashIdx = id.indexOf("/");
+      const author = slashIdx > 0 ? id.slice(0, slashIdx) : "";
+      const model = slashIdx > 0 ? id.slice(slashIdx + 1) : id;
+      return {
+        rank: i + 1,
+        model,
+        author,
+        tokens: formatTokens(count),
+      };
+    });
 
-    if (!data.entries || data.entries.length === 0) {
-      throw new Error("empty entries");
-    }
-
-    return data;
+    return { entries };
   } catch (err) {
-    try {
-      playwrightCli(["close"]);
-    } catch {
-      // ignore
-    }
-
     if (err instanceof CliError) throw err;
     throw new CliError(
-      "failed to scrape leaderboard data",
+      `failed to parse leaderboard data: ${err instanceof Error ? err.message : err}`,
       "SCRAPE_ERROR",
       ExitCode.SCRAPE,
     );

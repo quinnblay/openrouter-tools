@@ -31,8 +31,6 @@ node dist/index.js --help
 
 No API key required — uses OpenRouter's public API. Requires Node 18+.
 
-Optional: **playwright-cli** for `leaderboard --refresh`: `npm install -g @playwright/cli@latest`
-
 ## Usage
 
 ```
@@ -120,7 +118,7 @@ Shows the top 20 models by token usage. Configured models marked with `*`.
 
 Without `--app`, shows the global OpenRouter leaderboard from [openrouter.ai/rankings](https://openrouter.ai/rankings/trending). With `--app`, shows per-app usage from the [OpenRouter apps page](https://openrouter.ai/apps). Each app gets its own cache file.
 
-Data is scraped via `playwright-cli` (no JSON API exists) and cached locally. You can also pipe leaderboard data from external tools:
+Data is fetched from OpenRouter's rankings pages (parsed from server-rendered HTML) and cached locally. You can also pipe leaderboard data from external tools:
 
 ```bash
 echo '{"entries":[{"rank":1,"model":"Kimi K2.5","author":"moonshotai","tokens":"1.38T tokens"}]}' \
@@ -134,7 +132,7 @@ echo '{"entries":[{"rank":1,"model":"Kimi K2.5","author":"moonshotai","tokens":"
 | `--json` | Output structured JSON instead of formatted tables |
 | `--no-color` | Disable colored output (also respects `$NO_COLOR`) |
 | `--app [url]` | Use per-app leaderboard (default: `https://openclaw.ai/`) |
-| `--refresh` | Scrape fresh leaderboard data via `playwright-cli` |
+| `--refresh` | Fetch fresh leaderboard data |
 | `--help`, `-h` | Show help |
 
 Command aliases: `p` (price), `s` (search), `cmp` (compare), `cfg` (configured), `lb` (leaderboard).
@@ -243,7 +241,7 @@ All commands support `--json` for programmatic use.
 |----------|------|---------|
 | `GET /api/v1/models` | None | Model catalog, headline pricing |
 | `GET /api/v1/models/{author}/{slug}/endpoints` | None | Per-provider pricing, uptime, status |
-| `openrouter.ai/rankings/trending` | None (scrape) | Leaderboard data |
+| `openrouter.ai/rankings/trending` | None (HTML fetch) | Leaderboard data |
 
 Model list responses are cached for 5 minutes in `.cache/models.json`.
 
