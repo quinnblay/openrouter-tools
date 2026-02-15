@@ -45,6 +45,11 @@ function appSlug(url: string): string {
   return url.replace(/^https?:\/\//, "").replace(/\/.*/, "").replace(/[^a-zA-Z0-9]/g, "-");
 }
 
+function jsonOut(data: unknown): string {
+  const indent = process.stdout.isTTY ? 2 : undefined;
+  return JSON.stringify(data, null, indent);
+}
+
 const program = new Command();
 
 program
@@ -60,11 +65,12 @@ program
   .alias("s")
   .description("Search models by name or ID")
   .option("--json", "Output structured JSON")
-  .action(async (query: string, opts: { json?: boolean }) => {
+  .option("--limit <n>", "Maximum number of results", parseInt)
+  .action(async (query: string, opts: { json?: boolean; limit?: number }) => {
     const { data: models } = await fetchModels();
     const q = query.toLowerCase();
 
-    const results: SearchEntry[] = models
+    let results: SearchEntry[] = models
       .filter(
         (m) =>
           m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q),
@@ -83,11 +89,16 @@ program
         `no models found matching '${query}'`,
         "NOT_FOUND",
         ExitCode.NOT_FOUND,
+        ["Try a broader search term", "Use 'or-pricing search' with partial names"],
       );
     }
 
+    if (opts.limit && opts.limit > 0) {
+      results = results.slice(0, opts.limit);
+    }
+
     if (opts.json) {
-      console.log(JSON.stringify(results, null, 2));
+      console.log(jsonOut(results));
     } else {
       console.log(formatSearch(results, query));
     }
@@ -124,7 +135,7 @@ program
     };
 
     if (opts.json) {
-      console.log(JSON.stringify(output, null, 2));
+      console.log(jsonOut(output));
     } else {
       console.log(formatPrice(output));
     }
@@ -143,6 +154,7 @@ program
         "compare requires at least 2 models",
         "INVALID_INPUT",
         ExitCode.INVALID_INPUT,
+        ["Provide at least 2 model names or IDs", "Example: or-pricing compare claude-sonnet gpt-4o"],
       );
     }
 
@@ -180,7 +192,7 @@ program
     }
 
     if (opts.json) {
-      console.log(JSON.stringify(entries, null, 2));
+      console.log(jsonOut(entries));
     } else {
       console.log(formatCompare(entries));
     }
@@ -200,6 +212,7 @@ program
         `openclaw config not found at ${getConfigPath()}`,
         "CONFIG_ERROR",
         ExitCode.CONFIG,
+        ["Create ~/.openclaw/openclaw.json", "See documentation for config format"],
       );
     }
 
@@ -209,6 +222,7 @@ program
         `no models configured in ${getConfigPath()}`,
         "CONFIG_ERROR",
         ExitCode.CONFIG,
+        ["Add model entries to the 'agents.defaults.models' section"],
       );
     }
 
@@ -247,7 +261,7 @@ program
     }
 
     if (opts.json) {
-      console.log(JSON.stringify(entries, null, 2));
+      console.log(jsonOut(entries));
     } else {
       console.log(formatConfigured(entries));
     }
@@ -305,7 +319,9 @@ program
         try {
           parsed = JSON.parse(input) as LeaderboardOutput;
         } catch {
-          throw new CliError("invalid JSON on stdin", "INVALID_INPUT", ExitCode.INVALID_INPUT);
+          throw new CliError("invalid JSON on stdin", "INVALID_INPUT", ExitCode.INVALID_INPUT, [
+            `Pipe valid JSON: echo '{"entries":[...]}' | or-pricing leaderboard --update-cache`,
+          ]);
         }
 
         const ts = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -329,20 +345,21 @@ program
       const raw = readCacheRaw(cacheFile);
       if (!raw) {
         const appSuffix = appUrl ? ` --app ${appUrl}` : "";
-        console.log(`No leaderboard cache found.\n`);
-        console.log(`To populate, run:`);
-        console.log(`  or-pricing leaderboard --refresh${appSuffix}\n`);
-        console.log(`Or pipe JSON:`);
-        console.log(
-          `  echo '{"entries":[...]}' | or-pricing leaderboard --update-cache${appSuffix}`,
+        throw new CliError(
+          "no leaderboard cache found",
+          "NO_CACHE",
+          ExitCode.NOT_FOUND,
+          [
+            `Run: or-pricing leaderboard --refresh${appSuffix}`,
+            `Or pipe JSON: echo '{"entries":[...]}' | or-pricing leaderboard --update-cache${appSuffix}`,
+          ],
         );
-        return;
       }
 
       const data: LeaderboardOutput = JSON.parse(raw);
 
       if (opts.json) {
-        console.log(JSON.stringify(data, null, 2));
+        console.log(jsonOut(data));
         return;
       }
 
@@ -391,7 +408,7 @@ program
         },
         search: {
           args: "<query>",
-          flags: ["--json"],
+          flags: ["--json", "--limit <n>"],
           output: [
             {
               id: "string",
@@ -457,7 +474,7 @@ program
         INVALID_INPUT: 7,
       },
     };
-    console.log(JSON.stringify(schemas, null, 2));
+    console.log(jsonOut(schemas));
   });
 
 // --- Global error handler ---
@@ -474,7 +491,8 @@ async function run() {
         parentOpts.json;
 
       if (isJson) {
-        process.stderr.write(JSON.stringify(err.toJSON(), null, 2) + "\n");
+        const indent = process.stderr.isTTY ? 2 : undefined;
+        process.stderr.write(JSON.stringify(err.toJSON(), null, indent) + "\n");
       } else {
         process.stderr.write(`error: ${err.message}\n`);
       }

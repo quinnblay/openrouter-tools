@@ -28,6 +28,7 @@ export async function fetchModels(): Promise<ApiModelsResponse> {
       `OpenRouter API returned ${res.status}`,
       "NETWORK_ERROR",
       ExitCode.NETWORK,
+      ["OpenRouter API may be down — try again", "Check https://status.openrouter.ai"],
     );
   }
 
@@ -45,6 +46,7 @@ export async function fetchEndpoints(modelId: string): Promise<ApiEndpointsRespo
       `failed to fetch endpoints for ${modelId}`,
       "NETWORK_ERROR",
       ExitCode.NETWORK,
+      ["Check your internet connection", "Try again in a moment"],
     );
   }
 
@@ -53,6 +55,7 @@ export async function fetchEndpoints(modelId: string): Promise<ApiEndpointsRespo
       `OpenRouter API returned ${res.status} for ${modelId} endpoints`,
       "NETWORK_ERROR",
       ExitCode.NETWORK,
+      ["Verify the model ID exists", "OpenRouter API may be temporarily unavailable"],
     );
   }
 
