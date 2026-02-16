@@ -8,7 +8,6 @@ export async function readStdinLines(): Promise<string[]> {
 
   return Buffer.concat(chunks)
     .toString("utf-8")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
 }

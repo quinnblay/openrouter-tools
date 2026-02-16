@@ -102,7 +102,7 @@ program
 program
   .command("price [models...]")
   .alias("p")
-  .description("Per-provider pricing + weighted expected price (accepts stdin, one model per line)")
+  .description("Per-provider pricing + weighted expected price (accepts stdin, whitespace-separated)")
   .option("--json", "Output structured JSON")
   .action(async (queries: string[], opts: { json?: boolean }) => {
     const stdinLines = await readStdinLines();
@@ -156,7 +156,7 @@ program
 program
   .command("compare [models...]")
   .alias("cmp")
-  .description("Side-by-side comparison of multiple models (accepts stdin, one model per line)")
+  .description("Side-by-side comparison of multiple models (accepts stdin, whitespace-separated)")
   .option("--json", "Output structured JSON")
   .action(async (queries: string[], opts: { json?: boolean }) => {
     const stdinLines = await readStdinLines();
@@ -317,7 +317,7 @@ program
       commands: {
         price: {
           args: "[models...]",
-          stdin: "one model ID per line",
+          stdin: "whitespace-separated model IDs",
           flags: ["--json"],
           output: {
             id: "string",
@@ -353,7 +353,7 @@ program
         },
         compare: {
           args: "[models...]",
-          stdin: "one model ID per line",
+          stdin: "whitespace-separated model IDs",
           flags: ["--json"],
           output: [
             {

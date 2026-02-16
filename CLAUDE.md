@@ -38,7 +38,7 @@ node dist/index.js <command>    # Run
 - Each module has a single responsibility — edit the relevant file
 - `computePricing()` in `src/pricing.ts` is the core algorithm
 - `resolveModel()` in `src/resolve.ts` handles fuzzy matching with structured error for ambiguous results
-- `price` and `compare` accept variadic args + stdin (one model ID per line)
+- `price` and `compare` accept variadic args + stdin (whitespace-separated model IDs)
 - `leaderboard --app <url>` requires an explicit URL (e.g. `--app https://openclaw.ai/`)
 - No tests exist. Verify changes by running each command manually.
 

@@ -40,11 +40,12 @@ or-pricing compare [models...]      Side-by-side pricing comparison
 or-pricing leaderboard              Top models by usage on OpenRouter
 ```
 
-Both `price` and `compare` accept multiple models as arguments or via stdin (one model ID per line):
+Both `price` and `compare` accept multiple models as arguments or via stdin (whitespace-separated):
 
 ```bash
-or-pricing price claude-sonnet-4 gpt-4o          # multiple args
-echo -e "claude-sonnet-4\ngpt-4o" | or-pricing compare  # stdin
+or-pricing price claude-sonnet-4 gpt-4o                  # multiple args
+echo "claude-sonnet-4 gpt-4o" | or-pricing compare       # stdin (space-separated)
+echo -e "claude-sonnet-4\ngpt-4o" | or-pricing compare   # stdin (newline-separated)
 ```
 
 ### `price` — Detailed model pricing
