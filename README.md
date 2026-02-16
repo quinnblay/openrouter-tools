@@ -1,17 +1,42 @@
+[![npm version](https://img.shields.io/npm/v/or-pricing)](https://www.npmjs.com/package/or-pricing)
+[![npm downloads](https://img.shields.io/npm/dm/or-pricing)](https://www.npmjs.com/package/or-pricing)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Node >= 18](https://img.shields.io/node/v/or-pricing)](https://nodejs.org)
+
 # or-pricing
 
-A CLI tool that shows **realistic expected pricing** for OpenRouter models by querying per-provider endpoints and weighting by uptime — not just the cheapest (often misleading) headline price.
+A CLI tool that shows **realistic expected pricing** for OpenRouter models by querying per-provider endpoints and weighting by uptime.
+
+**No API key required** · **Works via npx** · **Node 18+**
+
+## Contents
+
+- [The Problem](#the-problem)
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [price](#price--detailed-model-pricing)
+  - [search](#search--find-models)
+  - [compare](#compare--side-by-side-comparison)
+  - [leaderboard](#leaderboard--top-models-by-usage)
+- [Flags](#flags)
+- [How Expected Pricing Works](#how-expected-pricing-works)
+- [Limitations](#limitations)
+- [JSON Output](#json-output)
+- [APIs Used](#apis-used)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## The Problem
 
-OpenRouter's headline pricing shows the cheapest available provider. This is often misleading:
+OpenRouter's headline pricing shows the cheapest available provider, but the price you actually pay depends on which provider handles your request. Here's Kimi K2.5:
 
 ```
-Headline:  $0.45 / $0.44 per M tokens  ← Chutes, int4, frequently DOWN
-Expected:  $0.56 / $2.67 per M tokens  ← what you'll actually pay
+Headline:  $0.45 / $0.44 per M tokens  ← cheapest provider
+Expected:  $0.56 / $2.67 per M tokens  ← weighted across all healthy providers
 ```
 
-The cheapest provider may be down, degraded, or using aggressive quantization. `or-pricing` queries every provider's pricing, uptime, and status, then computes a weighted expected price that reflects what you'll actually pay.
+Some providers may be down or using different quantization levels, so the effective price often differs from the headline. `or-pricing` queries every provider's pricing, uptime, and status, then computes a weighted expected price.
 
 ## Install
 
@@ -31,22 +56,33 @@ node dist/index.js --help
 
 No API key required — uses OpenRouter's public API. Requires Node 18+.
 
+## Quick Start
+
+```bash
+npx or-pricing price anthropic/claude-sonnet-4
+npx or-pricing compare openai/gpt-4o anthropic/claude-sonnet-4 deepseek/deepseek-r1
+npx or-pricing search deepseek
+npx or-pricing leaderboard --refresh
+```
+
 ## Usage
 
 ```
-or-pricing price [models...]        Per-provider pricing + weighted expected price
-or-pricing search <query>           Search models by name
-or-pricing compare [models...]      Side-by-side pricing comparison
-or-pricing leaderboard              Top models by usage on OpenRouter
+or-pricing price [models...]        Per-provider pricing + weighted expected price  (alias: p)
+or-pricing search <query>           Search models by name                          (alias: s)
+or-pricing compare [models...]      Side-by-side pricing comparison                (alias: cmp)
+or-pricing leaderboard              Top models by usage on OpenRouter              (alias: lb)
 ```
 
 Both `price` and `compare` accept multiple models as arguments or via stdin (whitespace-separated):
 
 ```bash
-or-pricing price claude-sonnet-4 gpt-4o                  # multiple args
-echo "claude-sonnet-4 gpt-4o" | or-pricing compare       # stdin (space-separated)
-echo -e "claude-sonnet-4\ngpt-4o" | or-pricing compare   # stdin (newline-separated)
+or-pricing price anthropic/claude-sonnet-4 openai/gpt-4o                  # multiple args
+echo "anthropic/claude-sonnet-4 openai/gpt-4o" | or-pricing compare       # stdin (space-separated)
+echo -e "anthropic/claude-sonnet-4\nopenai/gpt-4o" | or-pricing compare   # stdin (newline-separated)
 ```
+
+When pricing multiple models, endpoint queries are paced at ~0.3s apart to avoid rate limiting.
 
 ### `price` — Detailed model pricing
 
@@ -98,7 +134,16 @@ or-pricing search deepseek
 ### `compare` — Side-by-side comparison
 
 ```bash
-or-pricing compare kimi-k2.5 minimax-m2.5 deepseek-v3.2
+or-pricing compare anthropic/claude-sonnet-4 openai/gpt-4o deepseek/deepseek-v3.2
+```
+
+```
+Model Comparison
+
+  Model                                     Head P/M      Head C/M      Exp P/M       Exp C/M       Providers   Context
+  Anthropic: Claude Sonnet 4                $3            $15           $3.00         $15.00        5/5         976K
+  OpenAI: GPT-4o                            $2.5          $10           $2.50         $10.00        2/2         125K
+  DeepSeek: DeepSeek V3.2                   $0.25         $0.38         $0.32         $0.63         7/9         160K
 ```
 
 Shows headline vs. expected pricing, provider counts, and context length for each model.
@@ -125,15 +170,21 @@ echo '{"entries":[{"rank":1,"model":"Kimi K2.5","author":"moonshotai","tokens":"
 
 ## Flags
 
+**Global** (all commands):
+
 | Flag | Description |
 |------|-------------|
 | `--json` | Output structured JSON instead of formatted tables |
 | `--no-color` | Disable colored output (also respects `$NO_COLOR`) |
-| `--app <url>` | Use per-app leaderboard (e.g. `--app https://openclaw.ai/`) |
-| `--refresh` | Fetch fresh leaderboard data |
 | `--help`, `-h` | Show help |
 
-Command aliases: `p` (price), `s` (search), `cmp` (compare), `lb` (leaderboard).
+**Leaderboard only**:
+
+| Flag | Description |
+|------|-------------|
+| `--app <url>` | Per-app leaderboard (e.g. `--app https://openclaw.ai/`) |
+| `--refresh` | Fetch fresh leaderboard data instead of using cache |
+| `--update-cache` | Accept leaderboard JSON from stdin to update cache |
 
 ## How Expected Pricing Works
 
@@ -149,9 +200,18 @@ Provider status mapping:
 - `-1` → **degraded** (excluded)
 - `<= -2` → **DOWN** (excluded)
 
+## Limitations
+
+- Model list is cached for 5 minutes — not real-time pricing data
+- Expected price is a weighted estimate, not a guarantee of what you'll be charged
+- Designed for research and cost comparison, not billing integration
+
 ## JSON Output
 
 All commands support `--json` for programmatic use.
+
+<details>
+<summary>JSON output examples (click to expand)</summary>
 
 ### `price --json`
 
@@ -230,6 +290,8 @@ All commands support `--json` for programmatic use.
 }
 ```
 
+</details>
+
 ## APIs Used
 
 | Endpoint | Auth | Purpose |
@@ -239,6 +301,14 @@ All commands support `--json` for programmatic use.
 | `openrouter.ai/rankings/trending` | None (HTML fetch) | Leaderboard data |
 
 Model list responses are cached for 5 minutes in `.cache/models.json`.
+
+## Contributing
+
+Contributions welcome. Before submitting a PR:
+
+1. Run `npm run typecheck` and `npm run build`
+2. Manually test affected commands (no test suite)
+3. File an issue before starting major work
 
 ## License
 
