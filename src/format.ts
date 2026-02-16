@@ -3,7 +3,6 @@ import type {
   CompareEntry,
   LeaderboardEntry,
   PriceOutput,
-  ProviderEntry,
   SearchEntry,
 } from "./types.js";
 
@@ -111,37 +110,10 @@ export function formatCompare(entries: CompareEntry[]): string {
   return lines.join("\n");
 }
 
-export function formatConfigured(entries: CompareEntry[]): string {
-  const lines: string[] = [];
-  lines.push("");
-  lines.push(
-    `${chalk.bold("Configured Models")} ${chalk.dim("(from openclaw.json)")}`,
-  );
-  lines.push("");
-  lines.push(
-    `  ${chalk.dim(pad("", 3))} ${chalk.dim(pad("Model", 40))}  ${chalk.dim(pad("Head P/M", 12))}  ${chalk.dim(pad("Head C/M", 12))}  ${chalk.dim(pad("Exp P/M", 12))}  ${chalk.dim(pad("Exp C/M", 12))}  ${chalk.dim(pad("Providers", 10))}  ${chalk.dim("Context")}`,
-  );
-
-  for (const e of entries) {
-    const star = e.primary ? chalk.cyan("*") : " ";
-    const ep = e.expected_prompt !== null ? `$${e.expected_prompt.toFixed(2)}` : "n/a";
-    const ec = e.expected_completion !== null ? `$${e.expected_completion.toFixed(2)}` : "n/a";
-    const prov = `${e.healthy}/${e.providers}`;
-    const ctx = fmtContext(e.context);
-    lines.push(
-      `  ${star}  ${pad(e.name, 40)}  $${pad(String(e.headline_prompt), 11)}  $${pad(String(e.headline_completion), 11)}  ${pad(ep, 12)}  ${pad(ec, 12)}  ${pad(prov, 10)}  ${ctx}`,
-    );
-  }
-
-  lines.push("");
-  return lines.join("\n");
-}
-
 export function formatLeaderboard(
   entries: LeaderboardEntry[],
   title: string,
   cachedAt: string,
-  configuredAliases: string[],
 ): string {
   const lines: string[] = [];
   lines.push("");
@@ -150,20 +122,13 @@ export function formatLeaderboard(
   );
   lines.push("");
   lines.push(
-    `  ${chalk.dim(pad("Rank", 5))} ${chalk.dim(pad("", 3))} ${chalk.dim(pad("Model", 30))} ${chalk.dim(pad("Author", 20))} ${chalk.dim("Tokens")}`,
+    `  ${chalk.dim(pad("Rank", 5))} ${chalk.dim(pad("Model", 30))} ${chalk.dim(pad("Author", 20))} ${chalk.dim("Tokens")}`,
   );
 
   const shown = entries.slice(0, 20);
   for (const e of shown) {
-    let mark = " ";
-    for (const alias of configuredAliases) {
-      if (alias && e.model.toLowerCase().includes(alias.toLowerCase())) {
-        mark = chalk.cyan("*");
-        break;
-      }
-    }
     lines.push(
-      `  ${pad(`#${e.rank}`, 5)} ${mark}  ${pad(e.model, 30)} ${pad(e.author, 20)} ${e.tokens}`,
+      `  ${pad(`#${e.rank}`, 5)} ${pad(e.model, 30)} ${pad(e.author, 20)} ${e.tokens}`,
     );
   }
 

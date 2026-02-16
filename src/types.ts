@@ -77,7 +77,6 @@ export interface CompareEntry {
   expected_completion: number | null;
   providers: number;
   healthy: number;
-  primary?: boolean;
 }
 
 export interface LeaderboardEntry {
@@ -93,17 +92,6 @@ export interface LeaderboardOutput {
   source?: string;
 }
 
-// --- OpenClaw config ---
-
-export interface OpenClawConfig {
-  agents?: {
-    defaults?: {
-      model?: { primary?: string };
-      models?: Record<string, { alias?: string }>;
-    };
-  };
-}
-
 // --- Exit codes ---
 
 export enum ExitCode {
@@ -112,7 +100,6 @@ export enum ExitCode {
   NETWORK = 2,
   NOT_FOUND = 3,
   AMBIGUOUS = 4,
-  CONFIG = 5,
   SCRAPE = 6,
   INVALID_INPUT = 7,
 }
