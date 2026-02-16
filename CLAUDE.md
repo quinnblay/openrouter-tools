@@ -39,6 +39,7 @@ node dist/index.js <command>    # Run
 - `computePricing()` in `src/pricing.ts` is the core algorithm
 - `resolveModel()` in `src/resolve.ts` handles fuzzy matching with structured error for ambiguous results
 - `price` and `compare` accept variadic args + stdin (one model ID per line)
+- `leaderboard --app <url>` requires an explicit URL (e.g. `--app https://openclaw.ai/`)
 - No tests exist. Verify changes by running each command manually.
 
 ## OpenRouter APIs
