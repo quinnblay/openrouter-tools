@@ -34,11 +34,18 @@ No API key required — uses OpenRouter's public API. Requires Node 18+.
 ## Usage
 
 ```
-or-pricing price <model>            Per-provider pricing + weighted expected price
+or-pricing price [models...]        Per-provider pricing + weighted expected price
 or-pricing search <query>           Search models by name
-or-pricing compare <m1> <m2> ...    Side-by-side pricing comparison
-or-pricing configured               Pricing for models in openclaw.json
+or-pricing compare [models...]      Side-by-side pricing comparison
 or-pricing leaderboard              Top models by usage on OpenRouter
+```
+
+Both `price` and `compare` accept multiple models as arguments or via stdin (whitespace-separated):
+
+```bash
+or-pricing price claude-sonnet-4 gpt-4o                  # multiple args
+echo "claude-sonnet-4 gpt-4o" | or-pricing compare       # stdin (space-separated)
+echo -e "claude-sonnet-4\ngpt-4o" | or-pricing compare   # stdin (newline-separated)
 ```
 
 ### `price` — Detailed model pricing
@@ -96,25 +103,16 @@ or-pricing compare kimi-k2.5 minimax-m2.5 deepseek-v3.2
 
 Shows headline vs. expected pricing, provider counts, and context length for each model.
 
-### `configured` — OpenClaw integration
-
-```bash
-or-pricing configured
-```
-
-Reads model IDs from `~/.openclaw/openclaw.json` and shows pricing for all configured models. Primary model marked with `*`.
-
 ### `leaderboard` — Top models by usage
 
 ```bash
-or-pricing leaderboard                    # global OpenRouter leaderboard (from cache)
-or-pricing leaderboard --refresh          # scrape fresh global data
-or-pricing leaderboard --app              # per-app leaderboard (default: openclaw.ai)
-or-pricing leaderboard --app --refresh    # scrape fresh app data
-or-pricing leaderboard --app https://example.com/  # custom app URL
+or-pricing leaderboard                                     # global OpenRouter leaderboard (from cache)
+or-pricing leaderboard --refresh                           # scrape fresh global data
+or-pricing leaderboard --app https://openclaw.ai/          # per-app leaderboard
+or-pricing leaderboard --app https://openclaw.ai/ --refresh  # scrape fresh app data
 ```
 
-Shows the top 20 models by token usage. Configured models marked with `*`.
+Shows the top 20 models by token usage.
 
 Without `--app`, shows the global OpenRouter leaderboard from [openrouter.ai/rankings](https://openrouter.ai/rankings/trending). With `--app`, shows per-app usage from the [OpenRouter apps page](https://openrouter.ai/apps). Each app gets its own cache file.
 
@@ -131,11 +129,11 @@ echo '{"entries":[{"rank":1,"model":"Kimi K2.5","author":"moonshotai","tokens":"
 |------|-------------|
 | `--json` | Output structured JSON instead of formatted tables |
 | `--no-color` | Disable colored output (also respects `$NO_COLOR`) |
-| `--app [url]` | Use per-app leaderboard (default: `https://openclaw.ai/`) |
+| `--app <url>` | Use per-app leaderboard (e.g. `--app https://openclaw.ai/`) |
 | `--refresh` | Fetch fresh leaderboard data |
 | `--help`, `-h` | Show help |
 
-Command aliases: `p` (price), `s` (search), `cmp` (compare), `cfg` (configured), `lb` (leaderboard).
+Command aliases: `p` (price), `s` (search), `cmp` (compare), `lb` (leaderboard).
 
 ## How Expected Pricing Works
 
@@ -198,7 +196,7 @@ All commands support `--json` for programmatic use.
 ]
 ```
 
-### `compare --json` / `configured --json`
+### `compare --json`
 
 ```json
 [
@@ -211,13 +209,10 @@ All commands support `--json` for programmatic use.
     "expected_prompt": 0.56,
     "expected_completion": 2.67,
     "providers": 12,
-    "healthy": 10,
-    "primary": true
+    "healthy": 10
   }
 ]
 ```
-
-`primary` field only present in `configured --json`.
 
 ### `leaderboard --json`
 
